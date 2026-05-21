@@ -3,8 +3,11 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import StudentLogin from "./pages/StudentLogin";
+import StudentRegister from "./pages/StudentRegister";
+import Otp from "./pages/Otp";
 // import ClubLogin from "./pages/ClubLogin";
-import Clubs from "./pages/clubs";
+import Clubs from "./pages/Clubs";
 import ClubDetails from "./pages/ClubDetails";
 import About from "./pages/About";
 import Liveupdates from './pages/Liveupdates';
@@ -19,8 +22,9 @@ function App() {
     <Router>
       <Routes>
         <Route path="/" element={<Home />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register/>}/>
+        <Route path="/login" element={<StudentLogin />} />
+<Route path="/register" element={<StudentRegister />} />
+<Route path="/otp" element={<Otp />} />
           <Route path="/club-login" element={<ClubLogin />} />
           <Route path="/clubs" element={<Clubs />} />
         <Route path="/clubs/:id" element={<ClubDetails />} />

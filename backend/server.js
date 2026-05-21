@@ -6,8 +6,11 @@ const WebSocket = require("ws");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
+const connectDB = require("./config/db");
+const authRoutes = require("./routes/authRoutes");
 
 const app = express();
+connectDB();
 
 // Accept larger payloads (base64 images)
 app.use(express.json({ limit: "10mb" }));
@@ -18,16 +21,8 @@ const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
 const JWT_SECRET = process.env.JWT_SECRET || "replace_with_your_secret";
-const MONGO_URI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/event_manager";
 
-// Connect to MongoDB
-mongoose
-  .connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
-  .then(() => console.log("✅ MongoDB connected"))
-  .catch((err) => {
-    console.error("❌ MongoDB connection error:", err);
-    process.exit(1);
-  });
+
 
 // ---------- Schemas & Models ----------
 const { Schema } = mongoose;
@@ -86,6 +81,7 @@ function authenticateToken(req, res, next) {
 }
 
 // ---------- Routes ----------
+app.use("/api/auth", authRoutes);
 
 // Basic health
 app.get("/", (req, res) => res.send("Backend up"));

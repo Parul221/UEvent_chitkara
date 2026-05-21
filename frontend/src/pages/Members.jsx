@@ -1,7 +1,24 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-
-const API_BASE = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
+import { API_BASE } from "../config/api";
+import BackButton from "../components/BackButton";
+import {
+  LayoutDashboard,
+  CalendarPlus2,
+  CalendarRange,
+  Users,
+  LogOut,
+  Plus,
+  Search,
+  Trash2,
+  Edit3,
+  Eye,
+  User,
+  GraduationCap,
+  Briefcase,
+  MapPin,
+  X,
+} from "lucide-react";
 
 export default function Members() {
   const navigate = useNavigate();
@@ -9,6 +26,7 @@ export default function Members() {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [editingMember, setEditingMember] = useState(null);
   const [query, setQuery] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -65,8 +83,11 @@ export default function Members() {
     };
 
     try {
-      const res = await fetch(`${API_BASE}/api/members`, {
-        method: "POST",
+      const endpoint = editingMember
+        ? `${API_BASE}/api/members/${editingMember._id}`
+        : `${API_BASE}/api/members`;
+      const res = await fetch(endpoint, {
+        method: editingMember ? "PUT" : "POST",
         headers: {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -75,9 +96,14 @@ export default function Members() {
       });
 
       if (res.ok) {
-        const created = await res.json();
-        setMembers((prev) => [created, ...prev]);
+        const saved = await res.json();
+        setMembers((prev) =>
+          editingMember
+            ? prev.map((member) => (member._id === saved._id ? saved : member))
+            : [saved, ...prev]
+        );
         setShowModal(false);
+        setEditingMember(null);
         setForm({
           name: "",
           rollNo: "",
@@ -89,12 +115,40 @@ export default function Members() {
         });
       } else {
         const txt = await res.text().catch(() => "");
-        alert("Failed to add member: " + (txt || res.status));
+        alert("Failed to save member: " + (txt || res.status));
       }
     } catch (err) {
       console.error("submitForm error:", err);
       alert("Network or server error");
     }
+  }
+
+  function openCreateModal() {
+    setEditingMember(null);
+    setForm({
+      name: "",
+      rollNo: "",
+      department: "",
+      status: "Hosteller",
+      year: "",
+      branch: "",
+      position: "",
+    });
+    setShowModal(true);
+  }
+
+  function openEditModal(member) {
+    setEditingMember(member);
+    setForm({
+      name: member.name || "",
+      rollNo: member.meta?.rollNo || "",
+      department: member.meta?.department || "",
+      status: member.meta?.status || "Hosteller",
+      year: member.meta?.year || "",
+      branch: member.meta?.branch || "",
+      position: member.role || "",
+    });
+    setShowModal(true);
   }
 
   async function handleDelete(id) {
@@ -130,141 +184,207 @@ export default function Members() {
     );
   });
 
+  const clubInitials = useMemo(() => {
+    const name = clubInfo.name || "Club Portal";
+    return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+  }, [clubInfo]);
+
   return (
-    <div className="min-h-screen flex bg-[#0b0b0f] text-slate-200">
+    <div className="min-h-screen flex bg-black text-slate-200 relative overflow-hidden">
+      {/* Background decoration */}
+      <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-red-600/5 rounded-full blur-[120px] pointer-events-none"></div>
+
       {/* Sidebar */}
-      <aside className={`transition-all duration-200 ${sidebarOpen ? "w-64" : "w-20"} bg-black p-4 flex flex-col`}>
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-12 h-12 rounded-md bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center font-bold text-white text-lg">
-            CH
-          </div>
-          {sidebarOpen && (
-            <div>
-              <div className="text-lg font-bold">Parul</div>
-              <div className="text-xs text-slate-400">Admin</div>
+      <aside className={`transition-all duration-300 ${sidebarOpen ? "w-64" : "w-20"} bg-[#050508]/80 backdrop-blur-xl border-r border-white/10 p-5 flex flex-col justify-between z-30`}>
+        <div>
+          {/* Logo & Header info */}
+          <div className="flex items-center gap-3 mb-8 border-b border-white/5 pb-5">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center font-black text-white text-base shadow-[0_0_15px_rgba(220,38,38,0.2)]">
+              {clubInitials}
             </div>
-          )}
+            {sidebarOpen && (
+              <div className="leading-tight animate-fade-in">
+                <div className="text-sm font-black text-white truncate max-w-[150px]">{clubInfo.name || "Club Portal"}</div>
+                <div className="text-[10px] text-slate-400 font-semibold tracking-wider uppercase mt-0.5">{clubInfo.organizer || "Organizer"}</div>
+              </div>
+            )}
+          </div>
+
+          {/* Navigation */}
+          <nav className="space-y-1.5">
+            <button
+              onClick={() => navigate("/club-dashboard")}
+              className="flex items-center gap-3.5 w-full py-3 px-4 rounded-xl text-slate-300 hover:text-white hover:bg-white/5 transition-all duration-200 text-left font-bold text-xs"
+            >
+              <LayoutDashboard size={18} className="text-red-500" />
+              {sidebarOpen && <span className="animate-fade-in">Dashboard</span>}
+            </button>
+            
+            <button
+              onClick={() => navigate("/club-dashboard", { state: { openNew: true } })}
+              className="flex items-center gap-3.5 w-full py-3 px-4 rounded-xl text-slate-300 hover:text-white hover:bg-white/5 transition-all duration-200 text-left font-bold text-xs"
+            >
+              <CalendarPlus2 size={18} className="text-red-500" />
+              {sidebarOpen && <span className="animate-fade-in">Upload Event</span>}
+            </button>
+
+            <button
+              onClick={() => navigate("/events")}
+              className="flex items-center gap-3.5 w-full py-3 px-4 rounded-xl text-slate-300 hover:text-white hover:bg-white/5 transition-all duration-200 text-left font-bold text-xs"
+            >
+              <CalendarRange size={18} className="text-red-500" />
+              {sidebarOpen && <span className="animate-fade-in">All Events</span>}
+            </button>
+
+            <button
+              onClick={() => navigate("/members")}
+              className="flex items-center gap-3.5 w-full py-3 px-4 rounded-xl text-white bg-white/5 border border-white/5 transition-all duration-200 text-left font-bold text-xs"
+            >
+              <Users size={18} className="text-red-500" />
+              {sidebarOpen && <span className="animate-fade-in">Members</span>}
+            </button>
+          </nav>
         </div>
 
-        <nav className="flex-1 space-y-2">
-          <button
-            onClick={() => navigate("/club-dashboard")}
-            className="flex items-center gap-3 w-full py-2 px-3 rounded-md hover:bg-red-800/20 text-left"
-          >
-            <span className="text-xl">🏠</span>
-            {sidebarOpen && <span>Dashboard</span>}
-          </button>
-
-          <button
-            onClick={() => navigate("/club-dashboard", { state: { openNew: true } })}
-            className="flex items-center gap-3 w-full py-2 px-3 rounded-md hover:bg-red-800/20 text-left"
-          >
-            <span className="text-xl">➕</span>
-            {sidebarOpen && <span>Upload Event</span>}
-          </button>
-
-          <button
-            onClick={() => navigate("/all-events")}
-            className="flex items-center gap-3 w-full py-2 px-3 rounded-md hover:bg-red-800/20 text-left"
-          >
-            <span className="text-xl">📅</span>
-            {sidebarOpen && <span>All Events</span>}
-          </button>
-
-          <button
-            onClick={() => navigate("/members")}
-            className="flex items-center gap-3 w-full py-2 px-3 rounded-md hover:bg-red-800/20 text-left"
-          >
-            <span className="text-xl">👥</span>
-            {sidebarOpen && <span>Members</span>}
-          </button>
-        </nav>
-
-        <div className="mt-4">
+        {/* Sidebar bottom */}
+        <div className="space-y-4 pt-5 border-t border-white/5">
           <button
             onClick={() => {
               localStorage.removeItem("clubToken");
               localStorage.removeItem("clubInfo");
               window.location.href = "/club-login";
             }}
-            className="flex items-center gap-3 w-full py-2 px-3 rounded-md hover:bg-red-800/20 text-left"
+            className="flex items-center gap-3.5 w-full py-3 px-4 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-500/5 transition-all duration-200 text-left font-bold text-xs"
           >
-            <span className="text-xl">🚪</span>
-            {sidebarOpen && <span>Logout</span>}
+            <LogOut size={18} />
+            {sidebarOpen && <span className="animate-fade-in">Logout</span>}
           </button>
 
-          <div className="mt-4 text-xs text-slate-400">
-            <button onClick={() => setSidebarOpen((s) => !s)}>{sidebarOpen ? "Collapse" : "Expand"}</button>
-          </div>
+          <button 
+            className="text-[10px] text-slate-500 font-bold uppercase tracking-wider pl-4 hover:text-slate-300 transition" 
+            onClick={() => setSidebarOpen((s) => !s)}
+          >
+            {sidebarOpen ? "Collapse Sidebar" : "Expand"}
+          </button>
         </div>
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 p-6 md:p-10">
-        <header className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
+      <main className="flex-1 p-6 md:p-10 overflow-y-auto max-h-screen">
+        <BackButton className="mb-6" />
+
+        <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 mb-8 border-b border-white/5 pb-6">
           <div>
-            <h1 className="text-3xl font-extrabold">Members</h1>
-            <p className="text-slate-400 mt-1">Manage club members — add, view or remove members.</p>
+            <span className="text-[10px] text-red-500 font-extrabold uppercase tracking-widest bg-red-500/10 px-3 py-1 rounded-full">Member Directory</span>
+            <h1 className="text-3xl font-black mt-3 tracking-tight uppercase text-white">Club Members</h1>
+            <p className="text-slate-400 text-xs mt-1">Manage core team members, assign designations, and track rosters.</p>
           </div>
 
-          <div className="flex items-center gap-3 w-full md:w-auto">
-            <input
-              placeholder="Search by name, roll no, dept or position"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="flex-1 md:flex-none px-3 py-2 rounded-md bg-[#0b0b0f] border border-white/10 placeholder:text-slate-500"
-            />
+          <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+            <div className="relative flex items-center flex-1 lg:flex-none">
+              <Search size={14} className="absolute left-3.5 text-slate-500" />
+              <input
+                placeholder="Search members..."
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className="w-full lg:w-60 glass-input rounded-xl pl-9 pr-4 py-2.5 text-xs text-white border border-white/10 focus:border-red-500/50 outline-none"
+              />
+            </div>
+            
             <button
-              onClick={() => setShowModal(true)}
-              className="ml-0 md:ml-2 bg-red-600 hover:bg-red-700 px-4 py-2 rounded-md font-semibold"
+              onClick={openCreateModal}
+              className="bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-[0_0_15px_rgba(220,38,38,0.3)] cursor-pointer"
             >
-              ➕ Add Member
+              <Plus size={14} />
+              Add Member
             </button>
           </div>
         </header>
 
         {loading ? (
-          <div className="text-center py-14 text-slate-400">Loading members…</div>
+          <div className="text-center py-20 bg-white/5 border border-white/10 rounded-2xl">
+            <div className="animate-spin w-8 h-8 border-2 border-red-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+            <p className="text-slate-400 text-xs font-semibold">Fetching members...</p>
+          </div>
         ) : filtered.length === 0 ? (
-          <div className="text-center py-14 text-slate-400">
-            No members found. Click <span className="font-semibold">Add Member</span> to create one.
+          <div className="text-center py-20 bg-white/5 border border-white/10 rounded-2xl">
+            <Users size={40} className="text-slate-600 mx-auto mb-4" />
+            <h3 className="text-sm font-bold text-white">No Members Added</h3>
+            <p className="text-slate-500 text-xs mt-1">Start by clicking the Add Member button to append roles.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {filtered.map((m) => (
-              <div key={m._id} className="bg-black border border-red-700 rounded-lg p-4 flex flex-col justify-between hover:shadow-lg transition">
+              <div
+                key={m._id}
+                className="glass-panel border border-white/5 hover:border-red-500/20 rounded-2xl p-5 flex flex-col justify-between hover:shadow-xl transition-all duration-300 hover:-translate-y-1 group"
+              >
                 <div>
                   <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3">
-                      <div className="w-12 h-12 rounded-full bg-red-800 flex items-center justify-center text-xl font-bold text-white">
+                    <div className="flex items-center gap-3">
+                      <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center font-bold text-white text-base shadow-md group-hover:scale-105 transition-transform duration-200">
                         {m.name ? m.name.slice(0, 1).toUpperCase() : "?"}
                       </div>
                       <div>
-                        <h3 className="text-lg font-semibold">{m.name}</h3>
-                        <div className="text-sm text-slate-400 mt-1">
-                          Roll: <span className="font-medium text-slate-200">{m.meta?.rollNo || "—"}</span>
-                        </div>
+                        <h3 className="text-sm font-bold text-white leading-snug group-hover:text-red-500 transition-colors duration-200">{m.name}</h3>
+                        <span className="inline-block mt-1 text-[9px] font-bold uppercase tracking-wider text-slate-400 bg-white/5 px-2 py-0.5 rounded border border-white/5">
+                          {m.role || "Member"}
+                        </span>
                       </div>
                     </div>
-
-                    <div className="text-sm text-slate-400">{m.role || "—"}</div>
                   </div>
 
-                  <div className="mt-3 text-sm text-slate-400 space-y-1">
-                    <div>Dept: <span className="text-slate-200">{m.meta?.department || "—"}</span></div>
-                    <div>Status: <span className="text-slate-200">{m.meta?.status || "—"}</span></div>
-                    <div>Year: <span className="text-slate-200">{m.meta?.year || "—"}</span></div>
-                    <div>Branch: <span className="text-slate-200">{m.meta?.branch || "—"}</span></div>
+                  <div className="mt-5 space-y-2 border-t border-white/5 pt-4 text-xs text-slate-400">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Roll Number</span>
+                      <span className="font-semibold text-slate-200">{m.meta?.rollNo || "—"}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Department</span>
+                      <span className="text-slate-200">{m.meta?.department || "—"}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Academic Year</span>
+                      <span className="text-slate-200">{m.meta?.year || "—"} Year</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Residence</span>
+                      <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold border ${
+                        m.meta?.status === "Hosteller"
+                          ? "bg-red-500/10 border-red-500/25 text-red-400"
+                          : "bg-blue-500/10 border-blue-500/25 text-blue-400"
+                      }`}>
+                        {m.meta?.status || "—"}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
-                <div className="mt-4 flex items-center justify-between gap-2">
+                <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-between gap-3">
                   <div className="flex gap-2">
-                    <button onClick={() => navigate(`/members/${m._id}`)} className="px-3 py-1 border border-red-700 rounded text-sm" title="View details">View</button>
-                    <button onClick={() => alert("Edit feature coming soon")} className="px-3 py-1 border border-white-600 rounded text-sm text-white-300" title="Edit (coming soon)">Edit</button>
+                    <button
+                      onClick={() => navigate(`/members/${m._id}`)}
+                      className="px-3 py-1.5 border border-white/10 hover:border-white/20 hover:bg-white/5 rounded-xl text-[10px] font-bold text-slate-300 hover:text-white transition cursor-pointer"
+                      title="View Member details"
+                    >
+                      Profile
+                    </button>
+                    <button
+                      onClick={() => openEditModal(m)}
+                      className="p-1.5 border border-white/10 hover:border-white/20 rounded-xl text-slate-300 hover:text-white transition cursor-pointer"
+                      title="Edit Profile"
+                    >
+                      <Edit3 size={12} />
+                    </button>
                   </div>
 
-                  <button onClick={() => handleDelete(m._id)} className="px-3 py-1 rounded text-sm bg-red-700 text-white" title="Delete member">Delete</button>
+                  <button
+                    onClick={() => handleDelete(m._id)}
+                    className="p-1.5 bg-red-600/10 hover:bg-red-600 border border-red-500/20 hover:border-red-500 rounded-xl text-red-400 hover:text-white transition cursor-pointer"
+                    title="Delete member"
+                  >
+                    <Trash2 size={12} />
+                  </button>
                 </div>
               </div>
             ))}
@@ -272,53 +392,118 @@ export default function Members() {
         )}
       </main>
 
-      {/* Add Member Modal */}
+      {/* Add / Edit Member Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setShowModal(false)} />
-          <div className="relative w-full max-w-lg bg-black rounded-lg border border-red-700 p-6">
-            <h3 className="text-xl font-semibold mb-3">Add New Member</h3>
-            <form onSubmit={submitForm} className="space-y-3">
-              <input
-                placeholder="Member Name"
-                value={form.name}
-                onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))}
-                className="w-full p-2 rounded-md bg-[#0b0b0f] border border-red-700"
-                required
-              />
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="w-full max-w-lg glass-panel rounded-3xl border border-white/10 shadow-2xl overflow-hidden flex flex-col p-6 sm:p-8 animate-scale-up bg-neutral-950 relative max-h-[90vh]">
+            {/* Close */}
+            <button 
+              onClick={() => setShowModal(false)} 
+              className="absolute top-4 right-4 p-2 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition z-10 cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+
+            <h3 className="text-2xl font-black text-white uppercase tracking-tight mb-2">
+              {editingMember ? "Edit Member" : "New Member"}
+            </h3>
+            <p className="text-slate-400 text-xs mb-6">Enter academic roll details, department mappings, and club roles.</p>
+
+            <form onSubmit={submitForm} className="space-y-4">
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 tracking-wider uppercase pl-1">Student Name</label>
                 <input
-                  placeholder="Roll No"
-                  value={form.rollNo}
-                  onChange={(e) => setForm((s) => ({ ...s, rollNo: e.target.value }))}
-                  className="w-full p-2 rounded-md bg-[#0b0b0f] border border-red-700"
                   required
-                />
-                <input
-                  placeholder="Department"
-                  value={form.department}
-                  onChange={(e) => setForm((s) => ({ ...s, department: e.target.value }))}
-                  className="w-full p-2 rounded-md bg-[#0b0b0f] border border-red-700"
+                  placeholder="e.g. Rahul Sharma"
+                  value={form.name}
+                  onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))}
+                  className="w-full glass-input p-3 mt-1 rounded-xl text-xs text-white border border-white/10 focus:border-red-500/50 outline-none"
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <select value={form.status} onChange={(e) => setForm((s) => ({ ...s, status: e.target.value }))} className="w-full p-2 rounded-md bg-[#0b0b0f] border border-red-700">
-                  <option>Hosteller</option>
-                  <option>Day Scholar</option>
-                </select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 tracking-wider uppercase pl-1">Roll Number</label>
+                  <input
+                    required
+                    placeholder="e.g. 2110991234"
+                    value={form.rollNo}
+                    onChange={(e) => setForm((s) => ({ ...s, rollNo: e.target.value }))}
+                    className="w-full glass-input p-3 mt-1 rounded-xl text-xs text-white border border-white/10 focus:border-red-500/50 outline-none"
+                  />
+                </div>
 
-                <input placeholder="Year" value={form.year} onChange={(e) => setForm((s) => ({ ...s, year: e.target.value }))} className="w-full p-2 rounded-md bg-[#0b0b0f] border border-red-700" />
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 tracking-wider uppercase pl-1">Department</label>
+                  <input
+                    placeholder="e.g. CSE"
+                    value={form.department}
+                    onChange={(e) => setForm((s) => ({ ...s, department: e.target.value }))}
+                    className="w-full glass-input p-3 mt-1 rounded-xl text-xs text-white border border-white/10 focus:border-red-500/50 outline-none"
+                  />
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <input placeholder="Branch" value={form.branch} onChange={(e) => setForm((s) => ({ ...s, branch: e.target.value }))} className="w-full p-2 rounded-md bg-[#0b0b0f] border border-red-700" />
-                <input placeholder="Position" value={form.position} onChange={(e) => setForm((s) => ({ ...s, position: e.target.value }))} className="w-full p-2 rounded-md bg-[#0b0b0f] border border-red-700" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 tracking-wider uppercase pl-1">Residence Status</label>
+                  <select
+                    value={form.status}
+                    onChange={(e) => setForm((s) => ({ ...s, status: e.target.value }))}
+                    className="w-full glass-input p-3 mt-1 rounded-xl text-xs text-white border border-white/10 focus:border-red-500/50 outline-none bg-neutral-950 appearance-none"
+                  >
+                    <option>Hosteller</option>
+                    <option>Day Scholar</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 tracking-wider uppercase pl-1">Year</label>
+                  <input
+                    placeholder="e.g. 3rd"
+                    value={form.year}
+                    onChange={(e) => setForm((s) => ({ ...s, year: e.target.value }))}
+                    className="w-full glass-input p-3 mt-1 rounded-xl text-xs text-white border border-white/10 focus:border-red-500/50 outline-none"
+                  />
+                </div>
               </div>
 
-              <div className="flex justify-end gap-2 mt-2">
-                <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 rounded-md border border-red-700">Cancel</button>
-                <button type="submit" className="px-4 py-2 rounded-md bg-red-600 text-white">Add Member</button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 tracking-wider uppercase pl-1">Branch</label>
+                  <input
+                    placeholder="e.g. CSE-AI"
+                    value={form.branch}
+                    onChange={(e) => setForm((s) => ({ ...s, branch: e.target.value }))}
+                    className="w-full glass-input p-3 mt-1 rounded-xl text-xs text-white border border-white/10 focus:border-red-500/50 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 tracking-wider uppercase pl-1">Designation Role</label>
+                  <input
+                    placeholder="e.g. Lead Developer"
+                    value={form.position}
+                    onChange={(e) => setForm((s) => ({ ...s, position: e.target.value }))}
+                    className="w-full glass-input p-3 mt-1 rounded-xl text-xs text-white border border-white/10 focus:border-red-500/50 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-4 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={() => { setShowModal(false); setEditingMember(null); }}
+                  className="px-5 py-2.5 rounded-xl border border-white/10 hover:border-white/20 text-xs font-bold text-slate-300 hover:bg-white/5 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition shadow-[0_0_15px_rgba(220,38,38,0.2)] cursor-pointer"
+                >
+                  {editingMember ? "Save Changes" : "Create Member"}
+                </button>
               </div>
             </form>
           </div>

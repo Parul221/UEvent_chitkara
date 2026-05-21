@@ -4,13 +4,39 @@ const generateOtp = require("../utils/generateOtp");
 const sendOtpMail = require("../utils/sendOtpMail");
 const jwt = require("jsonwebtoken");
 const jwtConfig = require("../config/jwt");
+const bcrypt = require("bcryptjs");
+
+function toStudentProfile(user) {
+  if (!user) return null;
+  const source = typeof user.toObject === "function" ? user.toObject() : user;
+  return {
+    id: source._id,
+    name: source.name || "",
+    userId: source.userId || "",
+    department: source.department || "CSE",
+    group: source.group || "",
+    semester: source.semester || "",
+    year: source.year || "",
+    residence: source.residence || "",
+    email: source.email || "",
+    isVerified: Boolean(source.isVerified),
+  };
+}
+
+function signStudentToken(user) {
+  return jwt.sign(
+    { id: user._id, email: user.email, role: "student" },
+    jwtConfig.secret,
+    { expiresIn: jwtConfig.expiresIn }
+  );
+}
 
 /* =========================
    REGISTER (NEW - SAFE)
 ========================= */
 exports.register = async (req, res) => {
   try {
-    const { name, userId, department, email, password } = req.body;
+    const { name, userId, department, email, password, group, semester, year, residence } = req.body;
 
     if (!name || !userId || !department || !email || !password) {
       return res.status(400).json({
@@ -18,25 +44,43 @@ exports.register = async (req, res) => {
       });
     }
 
+    const normalizedEmail = String(email).trim().toLowerCase();
+
     // check if already exists
-    const existing = await User.findOne({ email });
-    if (existing) {
+    const existing = await User.findOne({ email: normalizedEmail });
+    if (existing && existing.password && existing.name && existing.userId) {
       return res.status(400).json({
         message: "User already exists"
       });
     }
 
-    const user = await User.create({
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const payload = {
       name,
       userId,
       department,
-      email,
-      password,
-      isVerified: false
-    });
+      group: group || "",
+      semester: semester || "",
+      year: year || "",
+      residence: residence || "",
+      email: normalizedEmail,
+      password: hashedPassword,
+      isVerified: true
+    };
+
+    let savedUser;
+    if (existing) {
+      savedUser = await User.findByIdAndUpdate(existing._id, payload, { new: true });
+    } else {
+      savedUser = await User.create(payload);
+    }
+
+    const token = signStudentToken(savedUser);
 
     return res.status(201).json({
-      message: "Registration successful. Please login."
+      message: "Registration successful.",
+      token,
+      user: toStudentProfile(savedUser)
     });
 
   } catch (error) {
@@ -62,12 +106,13 @@ exports.loginOrRegister = async (req, res) => {
       });
     }
 
-    let user = await User.findOne({ email });
+    const normalizedEmail = String(email).trim().toLowerCase();
+    let user = await User.findOne({ email: normalizedEmail });
 
     // 👉 auto create if not exists (OTP flow)
     if (!user) {
       user = await User.create({
-        email,
+        email: normalizedEmail,
         isVerified: false
       });
     }
@@ -75,18 +120,19 @@ exports.loginOrRegister = async (req, res) => {
     const otp = generateOtp();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
-    await Otp.deleteMany({ email });
+    await Otp.deleteMany({ email: normalizedEmail });
 
     await Otp.create({
-      email,
+      email: normalizedEmail,
       otp,
       expiresAt
     });
 
-    await sendOtpMail(email, otp);
+    await sendOtpMail(normalizedEmail, otp);
 
     return res.status(200).json({
-      message: "OTP sent to your email"
+      message: "OTP sent to your email",
+      user: toStudentProfile(user)
     });
 
   } catch (error) {
@@ -112,7 +158,8 @@ exports.verifyOtp = async (req, res) => {
       });
     }
 
-    const otpRecord = await Otp.findOne({ email }).sort({ createdAt: -1 });
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const otpRecord = await Otp.findOne({ email: normalizedEmail }).sort({ createdAt: -1 });
 
     if (!otpRecord) {
       return res.status(400).json({
@@ -132,22 +179,20 @@ exports.verifyOtp = async (req, res) => {
       });
     }
 
-    await User.findOneAndUpdate(
-      { email },
-      { isVerified: true }
+    const user = await User.findOneAndUpdate(
+      { email: normalizedEmail },
+      { isVerified: true },
+      { new: true }
     );
 
-    await Otp.deleteMany({ email });
+    await Otp.deleteMany({ email: normalizedEmail });
 
-    const token = jwt.sign(
-      { email },
-      jwtConfig.secret,
-      { expiresIn: jwtConfig.expiresIn }
-    );
+    const token = signStudentToken(user);
 
     return res.status(200).json({
       message: "OTP verified successfully",
-      token
+      token,
+      user: toStudentProfile(user)
     });
 
   } catch (error) {
@@ -156,5 +201,42 @@ exports.verifyOtp = async (req, res) => {
       message: "OTP verification failed",
       error: error.message
     });
+  }
+};
+
+exports.getProfile = async (req, res) => {
+  try {
+    const user = await User.findOne({ email: req.user.email });
+    if (!user) return res.status(404).json({ message: "Profile not found" });
+
+    return res.json({ user: toStudentProfile(user) });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Failed to fetch profile" });
+  }
+};
+
+exports.updateProfile = async (req, res) => {
+  try {
+    const allowed = ["name", "userId", "department", "group", "semester", "year", "residence"];
+    const updates = {};
+    allowed.forEach((key) => {
+      if (req.body[key] !== undefined) updates[key] = req.body[key];
+    });
+
+    const user = await User.findOneAndUpdate(
+      { email: req.user.email },
+      updates,
+      { new: true }
+    );
+    if (!user) return res.status(404).json({ message: "Profile not found" });
+
+    return res.json({
+      message: "Profile updated",
+      user: toStudentProfile(user)
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Failed to update profile" });
   }
 };

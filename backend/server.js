@@ -6,8 +6,11 @@ const WebSocket = require("ws");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
+const protectedRoutes = require("./routes/protectedRoutes");
+const User = require("./models/User");
 
 const app = express();
 connectDB();
@@ -35,10 +38,32 @@ const EventSchema = new Schema({
   attendees: { type: Number, default: 0 },
   description: String,
   image: String, // base64 dataURL or image URL
+  registrations: [
+    {
+      name: String,
+      roll: String,
+      email: String,
+      group: String,
+      semester: String,
+      year: String,
+      residence: String,
+      registeredAt: { type: Date, default: Date.now },
+    },
+  ],
   createdAt: { type: Date, default: Date.now },
   updatedAt: Date,
 });
 const Event = mongoose.model("Event", EventSchema);
+
+const ClubSchema = new Schema({
+  name: { type: String, required: true },
+  email: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  organizer: String,
+  description: String,
+  createdAt: { type: Date, default: Date.now },
+});
+const Club = mongoose.model("Club", ClubSchema);
 
 const MemberSchema = new Schema({
   name: { type: String, required: true },
@@ -64,6 +89,23 @@ function broadcast(update) {
   });
 }
 
+function toStudentProfile(user) {
+  if (!user) return null;
+  const source = typeof user.toObject === "function" ? user.toObject() : user;
+  return {
+    id: source._id,
+    name: source.name || "",
+    userId: source.userId || "",
+    department: source.department || "CSE",
+    group: source.group || "",
+    semester: source.semester || "",
+    year: source.year || "",
+    residence: source.residence || "",
+    email: source.email || "",
+    isVerified: Boolean(source.isVerified),
+  };
+}
+
 // ---------- Auth middleware ----------
 function authenticateToken(req, res, next) {
   const authHeader = req.headers["authorization"];
@@ -82,17 +124,56 @@ function authenticateToken(req, res, next) {
 
 // ---------- Routes ----------
 app.use("/api/auth", authRoutes);
+app.use("/api/protected", protectedRoutes);
 
 // Basic health
 app.get("/", (req, res) => res.send("Backend up"));
 
-// Club login (demo) - returns JWT + club info
-app.post("/api/club-login", (req, res) => {
+// Club registration
+app.post("/api/club-register", async (req, res) => {
+  try {
+    const { name, email, password, organizer, description } = req.body ?? {};
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: "Club name, email and password are required." });
+    }
+    if (!/\S+@\S+\.\S+/.test(email)) {
+      return res.status(400).json({ error: "Invalid email format." });
+    }
+
+    const exists = await Club.findOne({ email });
+    if (exists) return res.status(400).json({ error: "Club already registered." });
+
+    const club = await Club.create({
+      name,
+      email,
+      password: await bcrypt.hash(password, 10),
+      organizer: organizer || "",
+      description: description || "",
+    });
+
+    const clubPayload = { id: club._id, name: club.name, email: club.email, role: "club" };
+    const token = jwt.sign(clubPayload, JWT_SECRET, { expiresIn: "2h" });
+    return res.status(201).json({ token, club: clubPayload });
+  } catch (err) {
+    console.error("POST /api/club-register error:", err);
+    return res.status(500).json({ error: "Failed to register club" });
+  }
+});
+
+// Club login - returns JWT + club info
+app.post("/api/club-login", async (req, res) => {
   const { email, password } = req.body ?? {};
   if (!email || !password) return res.status(400).json({ error: "Email and password are required." });
   if (!/\S+@\S+\.\S+/.test(email)) return res.status(400).json({ error: "Invalid email format." });
 
-  const clubPayload = { id: 1, name: "Demo Club", email, role: "club" };
+  const club = await Club.findOne({ email });
+  if (club && !(await bcrypt.compare(password, club.password))) {
+    return res.status(401).json({ error: "Invalid club credentials." });
+  }
+
+  const clubPayload = club
+    ? { id: club._id, name: club.name, email: club.email, role: "club" }
+    : { id: 1, name: "Demo Club", email, role: "club" };
   const token = jwt.sign(clubPayload, JWT_SECRET, { expiresIn: "2h" });
   return res.json({ token, club: clubPayload });
 });
@@ -118,6 +199,92 @@ app.get("/api/events", async (req, res) => {
   } catch (err) {
     console.error("GET /api/events error:", err);
     res.status(500).json({ error: "Failed to fetch events" });
+  }
+});
+
+// GET /api/events/:id -> event details (public)
+app.get("/api/events/:id", async (req, res) => {
+  try {
+    const ev = await Event.findById(req.params.id).lean();
+    if (!ev) return res.status(404).json({ error: "Event not found" });
+    res.json(ev);
+  } catch (err) {
+    console.error("GET /api/events/:id error:", err);
+    res.status(500).json({ error: "Failed to fetch event" });
+  }
+});
+
+// POST /api/events/:id/register -> student event registration (public)
+app.post("/api/events/:id/register", async (req, res) => {
+  try {
+    const { name, roll, email, group, semester, year, residence } = req.body ?? {};
+    if (!name || !roll || !email) {
+      return res.status(400).json({ error: "Name, roll number and email are required." });
+    }
+    if (!/\S+@\S+\.\S+/.test(email)) {
+      return res.status(400).json({ error: "Invalid email format." });
+    }
+
+    const ev = await Event.findById(req.params.id);
+    if (!ev) return res.status(404).json({ error: "Event not found" });
+
+    const alreadyRegistered = (ev.registrations || []).some(
+      (entry) =>
+        String(entry.email || "").toLowerCase() === String(email).toLowerCase() ||
+        String(entry.roll || "").toLowerCase() === String(roll).toLowerCase()
+    );
+    if (alreadyRegistered) {
+      return res.status(409).json({ error: "Student is already registered for this event." });
+    }
+
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const registration = {
+      name: String(name).trim(),
+      roll: String(roll).trim(),
+      email: normalizedEmail,
+      group: group || "",
+      semester: semester || "",
+      year: year || "",
+      residence: residence || "",
+    };
+
+    ev.registrations.push(registration);
+    ev.attendees = Number(ev.attendees || 0) + 1;
+    ev.updatedAt = new Date();
+    await ev.save();
+
+    const user = await User.findOneAndUpdate(
+      { email: normalizedEmail },
+      {
+        $set: {
+          name: registration.name,
+          userId: registration.roll,
+          group: registration.group,
+          semester: registration.semester,
+          year: registration.year,
+          residence: registration.residence,
+        },
+        $setOnInsert: {
+          email: normalizedEmail,
+          department: "CSE",
+          isVerified: false,
+        },
+      },
+      { new: true, upsert: true }
+    );
+
+    broadcast({ type: "event_registration", eventId: ev._id, attendees: ev.attendees });
+    res.status(201).json({
+      success: true,
+      message: "Registration successful.",
+      attendees: ev.attendees,
+      event: ev,
+      user: toStudentProfile(user),
+      registration,
+    });
+  } catch (err) {
+    console.error("POST /api/events/:id/register error:", err);
+    res.status(500).json({ error: "Failed to register for event" });
   }
 });
 

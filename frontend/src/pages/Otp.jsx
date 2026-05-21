@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import API from "../services/api";
-import "./Otp.css";
+import BackButton from "../components/BackButton";
+import { saveStudentSession } from "../utils/studentProfile";
 
 export default function Otp() {
   const navigate = useNavigate();
@@ -40,10 +41,10 @@ export default function Otp() {
         otp: finalOtp
       });
 
-      localStorage.setItem("token", res.data.token);
+      saveStudentSession(res.data.token, res.data.user);
 
       alert("OTP verified");
-      navigate("/");
+      navigate("/", { replace: true });
 
     } catch (error) {
       alert(error.response?.data?.message || "OTP failed");
@@ -51,13 +52,14 @@ export default function Otp() {
   };
 
   return (
-    <div className="otp-container">
-      <div className="otp-card">
-        <h2 className="otp-title">OTP Verification</h2>
-        <p className="otp-subtitle">Enter OTP sent to your email</p>
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <BackButton className="fixed left-4 top-4 z-50" />
+      <div className="glass-panel w-full max-w-md p-8 rounded-2xl text-center">
+        <h2 className="text-3xl font-bold text-white mb-2">OTP Verification</h2>
+        <p className="text-gray-300 mb-6">Enter OTP sent to your email</p>
 
-        <form onSubmit={handleVerify}>
-          <div className="otp-input-group">
+        <form onSubmit={handleVerify} className="space-y-6">
+          <div className="flex justify-center gap-3">
             {otp.map((digit, index) => (
               <input
                 key={index}
@@ -66,11 +68,14 @@ export default function Otp() {
                 maxLength="1"
                 value={digit}
                 onChange={(e) => handleChange(e.target.value, index)}
+                className="w-12 h-14 glass-input rounded-lg text-center text-xl text-white font-bold"
               />
             ))}
           </div>
 
-          <button type="submit">Verify OTP</button>
+          <button type="submit" className="w-full glass-button rounded-md py-3 font-bold text-white">
+            Verify OTP
+          </button>
         </form>
       </div>
     </div>

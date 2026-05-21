@@ -14,6 +14,23 @@ const userSchema = new mongoose.Schema({
     enum: ["CSE", "AI", "MECHANICAL", "ELECTRONICS"],
     default: "CSE"   // ✅ safe default
   },
+  group: {
+    type: String,
+    default: ""
+  },
+  semester: {
+    type: String,
+    default: ""
+  },
+  year: {
+    type: String,
+    default: ""
+  },
+  residence: {
+    type: String,
+    enum: ["Hosteller", "Day Scholar", ""],
+    default: ""
+  },
   email: {
     type: String,
     required: true,

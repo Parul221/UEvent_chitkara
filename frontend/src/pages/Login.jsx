@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { API_URL } from "../config/api";
+import { saveStudentProfile, saveStudentSession } from "../utils/studentProfile";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -25,7 +27,7 @@ export default function Login() {
     try {
       setLoading(true);
 
-      const res = await fetch("http://localhost:5000/api/auth/login", {
+      const res = await fetch(`${API_URL}/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -40,6 +42,9 @@ export default function Login() {
         return;
       }
 
+      if (data.user) {
+        saveStudentProfile(data.user);
+      }
       setOtpSent(true);
       alert("OTP sent to your email!");
     } catch (err) {
@@ -64,7 +69,7 @@ export default function Login() {
     try {
       setLoading(true);
 
-      const res = await fetch("http://localhost:5000/api/auth/verify-otp", {
+      const res = await fetch(`${API_URL}/auth/verify-otp`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -82,16 +87,11 @@ export default function Login() {
         return;
       }
 
-      // SAVE TOKEN
-      localStorage.setItem("studentToken", data.token);
-
-      if (data.user) {
-        localStorage.setItem("studentInfo", JSON.stringify(data.user));
-      }
+      saveStudentSession(data.token, data.user);
 
       alert("Login Successful!");
 
-      navigate("/events");
+      navigate("/", { replace: true });
     } catch (err) {
       console.error(err);
       setError("Network error");
@@ -101,16 +101,15 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-black relative overflow-hidden">
-      <div className="absolute w-[500px] h-[500px] bg-red-700 rounded-full blur-[160px] opacity-30"></div>
+    <div className="min-h-screen flex items-center justify-center p-4">
 
-      <div className="bg-[#0f0f0f]/80 backdrop-blur-xl p-10 rounded-2xl shadow-2xl w-full max-w-md border border-red-700/40">
+      <div className="glass-panel p-10 rounded-2xl w-full max-w-md">
 
-        <h2 className="text-3xl font-extrabold text-center mb-4 text-white">
+        <h2 className="text-3xl font-extrabold text-center mb-2 text-white">
           Student Login
         </h2>
 
-        <p className="text-center text-red-500 font-semibold mb-6">
+        <p className="text-center text-gray-300 font-semibold mb-6">
           OTP Authentication
         </p>
 
@@ -126,7 +125,7 @@ export default function Login() {
             <input
               type="email"
               placeholder="Enter Email"
-              className="w-full p-3 border border-gray-700 bg-[#111] text-white rounded-lg"
+              className="w-full glass-input p-3 rounded-lg text-white"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
@@ -134,7 +133,7 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-red-700 text-white py-3 rounded-lg font-bold"
+              className="w-full glass-button text-white py-3 rounded-lg font-bold"
             >
               {loading ? "Sending OTP..." : "Send OTP"}
             </button>
@@ -146,7 +145,7 @@ export default function Login() {
             <input
               type="text"
               placeholder="Enter OTP"
-              className="w-full p-3 border border-gray-700 bg-[#111] text-white rounded-lg"
+              className="w-full glass-input p-3 rounded-lg text-white"
               value={otp}
               onChange={(e) => setOtp(e.target.value)}
             />
@@ -154,7 +153,7 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-green-600 text-white py-3 rounded-lg font-bold"
+              className="w-full glass-button text-white py-3 rounded-lg font-bold bg-green-600/90 hover:bg-green-500 border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.3)] hover:shadow-[0_0_25px_rgba(34,197,94,0.5)]"
             >
               {loading ? "Verifying..." : "Verify OTP"}
             </button>
@@ -162,10 +161,10 @@ export default function Login() {
           </form>
         )}
 
-        <p className="text-center text-gray-400 mt-4 text-sm">
+        <p className="text-center text-gray-400 mt-6 text-sm">
           Don't have an account?{" "}
           <Link
-            className="text-red-500 hover:text-red-400 font-semibold underline"
+            className="text-white hover:text-red-400 font-semibold transition-colors"
             to="/register"
           >
             Register

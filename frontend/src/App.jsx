@@ -13,9 +13,11 @@ import About from "./pages/About";
 import Liveupdates from './pages/Liveupdates';
 import ClubDashboard from "./pages/ClubDashboard"; 
 import ClubLogin from "./pages/ClubLogin"; 
+import ClubRegister from "./pages/ClubRegister";
 import Members from "./pages/Members";
+import MemberDetails from "./pages/MemberDetails";
 import Events from "./pages/Events";
-import ChatBot from "./pages/ChatBot";
+import Profile from "./pages/Profile";
 
 function App() {
   return (
@@ -26,15 +28,16 @@ function App() {
 <Route path="/register" element={<StudentRegister />} />
 <Route path="/otp" element={<Otp />} />
           <Route path="/club-login" element={<ClubLogin />} />
+          <Route path="/club-register" element={<ClubRegister />} />
           <Route path="/clubs" element={<Clubs />} />
         <Route path="/clubs/:id" element={<ClubDetails />} />
         <Route path="/about" element={<About />} />
         <Route path="/live-updates" element={<Liveupdates />} />
+             <Route path="/events" element={<Events/>} />
              <Route path="/Events" element={<Events/>} />
-             <Route path="/ChatBot" element={<ChatBot/>} />
-
-
 <Route path="/members" element={<Members />} />
+<Route path="/members/:id" element={<MemberDetails />} />
+<Route path="/profile" element={<Profile />} />
 
         <Route path="/club-dashboard" element={<ClubDashboard />} />
       

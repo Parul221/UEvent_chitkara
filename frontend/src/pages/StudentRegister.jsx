@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../services/api";
-import "./StudentRegister.css";
+import BackButton from "../components/BackButton";
+import { saveStudentSession } from "../utils/studentProfile";
 
 export default function StudentRegister() {
   const navigate = useNavigate();
@@ -10,6 +11,10 @@ export default function StudentRegister() {
     name: "",
     userId: "",
     department: "CSE",
+    group: "",
+    semester: "",
+    year: "",
+    residence: "Hosteller",
     email: "",
     password: ""
   });
@@ -40,9 +45,11 @@ export default function StudentRegister() {
       setLoading(true);
 
       const res = await API.post("/auth/register", form);
+      saveStudentSession({ user: res.data.user });
+      await API.post("/auth/login", { email: form.email });
 
-      alert(res.data.message); // backend message
-      navigate("/login");
+      alert("Registration saved. OTP sent to your email.");
+      navigate("/otp", { replace: true, state: { email: form.email } });
 
     } catch (error) {
       const msg =
@@ -55,16 +62,18 @@ export default function StudentRegister() {
   };
 
   return (
-    <div className="register-container">
-      <div className="register-card">
-        <h2 className="register-title">Student Register</h2>
+    <div className="min-h-screen flex items-center justify-center p-4 py-12">
+      <BackButton className="fixed left-4 top-4 z-50" />
+      <div className="glass-panel w-full max-w-md p-8 rounded-2xl text-center">
+        <h2 className="text-3xl font-bold text-white mb-6">Student Register</h2>
 
-        <form onSubmit={handleRegister}>
+        <form onSubmit={handleRegister} className="space-y-4 text-left">
           <input
             name="name"
             placeholder="Full Name"
             value={form.name}
             onChange={handleChange}
+            className="w-full glass-input rounded-md px-4 py-2 text-white"
           />
 
           <input
@@ -72,12 +81,14 @@ export default function StudentRegister() {
             placeholder="Student ID"
             value={form.userId}
             onChange={handleChange}
+            className="w-full glass-input rounded-md px-4 py-2 text-white"
           />
 
           <select
             name="department"
             value={form.department}
             onChange={handleChange}
+            className="w-full glass-input rounded-md px-4 py-2 text-white"
           >
             <option value="CSE">CSE</option>
             <option value="AI">AI</option>
@@ -86,10 +97,47 @@ export default function StudentRegister() {
           </select>
 
           <input
+            name="group"
+            placeholder="Group / Section"
+            value={form.group}
+            onChange={handleChange}
+            className="w-full glass-input rounded-md px-4 py-2 text-white"
+          />
+
+          <div className="flex gap-4">
+            <input
+              name="semester"
+              placeholder="Semester"
+              value={form.semester}
+              onChange={handleChange}
+              className="w-full glass-input rounded-md px-4 py-2 text-white"
+            />
+
+            <input
+              name="year"
+              placeholder="Year"
+              value={form.year}
+              onChange={handleChange}
+              className="w-full glass-input rounded-md px-4 py-2 text-white"
+            />
+          </div>
+
+          <select
+            name="residence"
+            value={form.residence}
+            onChange={handleChange}
+            className="w-full glass-input rounded-md px-4 py-2 text-white"
+          >
+            <option>Hosteller</option>
+            <option>Day Scholar</option>
+          </select>
+
+          <input
             name="email"
             placeholder="Email Address"
             value={form.email}
             onChange={handleChange}
+            className="w-full glass-input rounded-md px-4 py-2 text-white"
           />
 
           <input
@@ -98,26 +146,25 @@ export default function StudentRegister() {
             placeholder="Password"
             value={form.password}
             onChange={handleChange}
+            className="w-full glass-input rounded-md px-4 py-2 text-white"
           />
 
-          <button type="submit" disabled={loading}>
+          <button 
+            type="submit" 
+            disabled={loading}
+            className="w-full glass-button rounded-md py-3 font-bold text-white mt-4"
+          >
             {loading ? "Registering..." : "Register"}
           </button>
         </form>
 
         <p
-          className="link-text"
+          className="mt-6 text-sm text-gray-300 cursor-pointer hover:text-white transition-colors"
           onClick={() => navigate("/login")}
         >
           Already registered? Login
         </p>
 
-        <p
-          className="link-text"
-          onClick={() => navigate("/")}
-        >
-          ← Back
-        </p>
       </div>
     </div>
   );
